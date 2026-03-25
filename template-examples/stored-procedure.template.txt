@@ -1,0 +1,10 @@
+#! name: Stored Procedure
+#! file: usp_{{ model.UseName }}.sql
+CREATE PROCEDURE usp_{{ model.UseName }}
+@Type VARCHAR(50),
+{{ for item in model.Param }}@{{ item.ColumnName }} {{ item.SqlDataType }} = NULL{{ if !for.last }},{{ end }}
+{{ end }}
+AS
+BEGIN
+    SELECT * FROM {{ model.TableQualifiedName }}
+END

@@ -1,0 +1,10 @@
+#! name: Controller
+#! file: {{ model.UseName }}Controller.cs
+[Route("api/[controller]")]
+[ApiController]
+public class {{ model.UseName }}Controller({{ model.UseName }}Service mod) : ControllerBase {
+    [HttpGet("{id{{ if model.PrimaryRouteConstraint != "" }}:{{ model.PrimaryRouteConstraint }}{{ end }}}")]
+    public IActionResult Find({{ model.PrimaryDataType }} id) {
+        return Ok(mod.Find(id));
+    }
+}

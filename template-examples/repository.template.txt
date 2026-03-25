@@ -1,0 +1,7 @@
+#! name: Repository
+#! file: {{ model.UseName }}Repo.cs
+public class {{ model.UseName }}Repo(Dbcontrol sql) {
+    public List<{{ model.UseName }}> GetAll() {
+        return sql.Query<{{ model.UseName }}>("SELECT * FROM {{ model.TableQualifiedName }}");
+    }
+}

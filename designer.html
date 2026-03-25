@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Template Designer</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-page="designer">
+  <div class="page-shell page-shell-narrow">
+    <header class="hero hero-compact">
+      <div class="hero-copy">
+        <p class="eyebrow">Template Authoring</p>
+        <h1>Designer</h1>
+        <p class="hero-byline">Template authoring workspace by Adrian Jaspio</p>
+        <p class="hero-text">
+          Create or update scaffold templates here, then go back to the generator page to use them.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <a class="secondary-button button-link" href="./index.html">Back To Generator</a>
+      </div>
+    </header>
+
+    <main class="designer-layout">
+      <section class="panel designer-page-panel">
+        <div class="panel-header">
+          <h2>Template Designer</h2>
+          <p>Saved templates stay in this browser and appear automatically in the generator.</p>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Template Name</span>
+            <input id="designerNameInput" type="text" placeholder="Example: API Controller">
+          </label>
+          <label class="field">
+            <span>Output File Pattern</span>
+            <input id="designerFileInput" type="text" placeholder="{{ model.UseName }}Controller.cs">
+          </label>
+        </div>
+
+        <label class="field field-block">
+          <span>Template Body</span>
+          <textarea id="designerBodyInput" class="designer-page-textarea" spellcheck="false" placeholder="Write your template here..."></textarea>
+        </label>
+
+        <div class="action-row">
+          <button id="saveTemplateButton" class="primary-button" type="button">Save Template</button>
+          <button id="saveAsNewDesignerButton" class="secondary-button" type="button">Save As New</button>
+          <button id="downloadTemplateButton" class="secondary-button" type="button">Download Template</button>
+          <button id="clearDesignerButton" class="secondary-button" type="button">Clear</button>
+        </div>
+
+        <p id="designerStatus" class="template-meta">Use metadata like `#! name:` and `#! file:` only when importing from folder files. The form here already covers those fields.</p>
+      </section>
+
+      <aside class="panel designer-help-panel">
+        <div class="panel-header">
+          <h2>Template Notes</h2>
+          <p>Keep the designer focused on the three things that matter: name, file pattern, and body.</p>
+        </div>
+
+        <div class="designer-notes-shell">
+          <nav class="designer-notes-nav">
+            <a href="#notes-model">Model</a>
+            <a href="#notes-columns">Columns</a>
+            <a href="#notes-syntax">Syntax</a>
+            <a href="#notes-helpers">Helpers</a>
+            <a href="#notes-files">Files</a>
+            <a href="#notes-library">Library</a>
+          </nav>
+
+          <div class="designer-notes-content">
+            <section id="notes-model" class="help-block">
+              <h3>Template Legend</h3>
+              <div class="legend-group">
+                <strong>Model</strong>
+                <p><code>{{ model.UseName }}</code> class name or table-derived name</p>
+                <p><code>{{ model.Table }}</code> original table input</p>
+                <p><code>{{ model.TableName }}</code> table name only</p>
+                <p><code>{{ model.TableSchema }}</code> schema only</p>
+                <p><code>{{ model.TableQualifiedName }}</code> schema + table</p>
+                <p><code>{{ model.Primary }}</code> primary key column</p>
+                <p><code>{{ model.PrimaryDataType }}</code> primary key type</p>
+                <p><code>{{ model.PrimaryRouteConstraint }}</code> route token like <code>int</code> or <code>guid</code></p>
+                <p><code>{{ model.ClassLower }}</code> lower-case class name</p>
+              </div>
+
+              <div class="legend-group">
+                <strong>Collections</strong>
+                <p><code>{{ model.Param }}</code> all parsed columns</p>
+                <p><code>{{ model.ParamNoPrimary }}</code> all columns except the selected primary column</p>
+                <p><code>{{ for item in model.Param }}</code> loop over columns</p>
+              </div>
+            </section>
+
+            <section id="notes-columns" class="help-block">
+              <h3>Column Item Fields</h3>
+              <div class="legend-group">
+                <p><code>{{ item.ColumnName }}</code> raw column name</p>
+                <p><code>{{ item.ReadableName }}</code> display label</p>
+                <p><code>{{ item.KeywordDataType }}</code> generated type like <code>int</code>, <code>string</code>, <code>DateTime</code></p>
+                <p><code>{{ item.SqlDataType }}</code> SQL type like <code>nvarchar(50)</code></p>
+                <p><code>{{ item.Nullable }}</code> original nullable flag</p>
+                <p><code>{{ item.CanBeNullable }}</code> generated nullable support</p>
+                <p><code>{{ item.IsAutoIncrement }}</code> identity flag</p>
+                <p><code>{{ item.DataTypeName }}</code> original SQL type name</p>
+                <p><code>{{ item.ColumnSize }}</code>, <code>{{ item.NumericPrecision }}</code>, <code>{{ item.NumericScale }}</code></p>
+              </div>
+            </section>
+
+            <section id="notes-syntax" class="help-block">
+              <h3>Control Syntax</h3>
+              <div class="legend-group">
+                <p><code>{{ for item in model.Param }} ... {{ end }}</code></p>
+                <p><code>{{ if model.PrimaryRouteConstraint != "" }} ... {{ else }} ... {{ end }}</code></p>
+                <p><code>{{ item.CanBeNullable ? "?" : "" }}</code></p>
+              </div>
+            </section>
+
+            <section id="notes-helpers" class="help-block">
+              <h3>Supported Helpers</h3>
+              <div class="legend-group">
+                <p><code>value | string.lower</code>, <code>string.upper</code>, <code>string.trim</code>, <code>string.replace "a", "b"</code></p>
+                <p><code>value | string.contains "x"</code>, <code>string.starts_with</code>, <code>string.ends_with</code></p>
+                <p><code>value | array.join ", "</code>, <code>array.size</code>, <code>array.first</code>, <code>array.last</code></p>
+                <p><code>value | number.round</code>, <code>number.floor</code>, <code>number.ceil</code>, <code>number.format "0.00"</code></p>
+                <p><code>date.now | date.to_string "yyyy-MM-dd"</code>, <code>date.today</code>, <code>date.add_days 1</code></p>
+                <p><code>default value, "fallback"</code>, <code>empty value</code></p>
+              </div>
+            </section>
+
+            <section id="notes-files" class="help-block">
+              <h3>File Pattern Examples</h3>
+              <div class="legend-group">
+                <p><code>{{ model.UseName }}Repo.cs</code></p>
+                <p><code>{{ model.UseName }}Controller.cs</code></p>
+                <p><code>usp_{{ model.UseName }}.sql</code></p>
+                <p><code>List.razor</code></p>
+              </div>
+            </section>
+
+            <section id="notes-library" class="help-block">
+              <h3>Saved Library</h3>
+              <label class="field">
+                <span>Search Saved Templates</span>
+                <input id="designerSearchInput" type="text" placeholder="Find a saved template">
+              </label>
+              <div id="savedTemplateList" class="saved-template-list"></div>
+            </section>
+          </div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script src="./script.js"></script>
+</body>
+</html>

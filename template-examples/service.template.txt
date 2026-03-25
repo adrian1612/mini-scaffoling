@@ -1,0 +1,5 @@
+#! name: Service
+#! file: {{ model.UseName }}Service.cs
+public class {{ model.UseName }}Service({{ model.UseName }}Repo repo) {
+    public List<{{ model.UseName }}> GetAll() => repo.GetAll();
+}

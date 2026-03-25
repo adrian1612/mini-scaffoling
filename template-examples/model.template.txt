@@ -1,0 +1,5 @@
+#! name: Model
+#! file: {{ model.UseName }}.cs
+public class {{ model.UseName }} {
+{{ for item in model.Param }}    public {{ item.KeywordDataType }}{{ item.CanBeNullable ? "?" : "" }} {{ item.ColumnName }} { get; set; }
+{{ end }}}

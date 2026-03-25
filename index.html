@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini Scaffolding</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body data-page="generator">
+  <div class="page-shell">
+    <header class="hero hero-compact">
+      <div class="hero-copy">
+        <p class="eyebrow">Portable Template Playground</p>
+        <h1>Mini Scaffolding</h1>
+        <p class="hero-byline">Portable scaffolding playground by Adrian Jaspio</p>
+        <p class="hero-text">
+          Paste a table scheme, generate outputs, and keep template editing out of the way until you need it.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <a class="primary-button button-link" href="./designer.html">Open Template Designer</a>
+        <button id="loadTemplateFolderButton" class="secondary-button" type="button">Load Template Folder</button>
+        <button id="resetTemplatesButton" class="secondary-button" type="button">Use Bundled Templates</button>
+        <input id="templateFolderInput" type="file" webkitdirectory directory multiple hidden>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="panel input-panel">
+        <div class="panel-header">
+          <h2>Schema Input</h2>
+          <p>Paste a copied table scheme or a `CREATE TABLE` script.</p>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Table Name</span>
+            <input id="tableNameInput" type="text" value="dbo.tbl_sample">
+          </label>
+
+          <label class="field">
+            <span>Preferred Class Name</span>
+            <input id="classNameInput" type="text" value="Sample">
+          </label>
+        </div>
+
+        <label class="field field-block">
+          <span>Table Scheme</span>
+          <textarea id="schemaInput" spellcheck="false">ID	int	NOT NULL	IDENTITY
+Code	nvarchar(50)	NOT NULL
+Name	nvarchar(255)	NULL
+IsActive	bit	NOT NULL
+CreatedDate	datetime	NULL</textarea>
+        </label>
+
+        <div class="action-row">
+          <button id="generateButton" class="primary-button" type="button">Generate Output</button>
+          <button id="clearButton" class="secondary-button" type="button">Clear</button>
+        </div>
+
+        <div class="model-summary">
+          <div>
+            <span class="summary-label">Loaded Templates</span>
+            <strong id="templateCount">0</strong>
+          </div>
+          <div>
+            <span class="summary-label">Parsed Columns</span>
+            <strong id="columnCount">0</strong>
+          </div>
+          <div>
+            <span class="summary-label">Primary Key</span>
+            <strong id="primaryKeyLabel">-</strong>
+          </div>
+        </div>
+
+        <div class="parsed-panel">
+          <div class="parsed-header">
+            <h3>Parsed Columns</h3>
+            <p id="parseStatus">Waiting for input</p>
+          </div>
+          <div class="parsed-table-wrap">
+            <table class="parsed-table">
+              <thead>
+                <tr>
+                  <th>Column</th>
+                  <th>Type</th>
+                  <th>SQL Type</th>
+                  <th>Nullable</th>
+                  <th>Identity</th>
+                </tr>
+              </thead>
+              <tbody id="parsedTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel template-panel">
+        <div class="panel-header template-panel-header">
+          <div>
+            <h2>Outputs</h2>
+            <p>Each card is one scaffold result. Use Edit only when you want to adjust the source template.</p>
+          </div>
+          <div class="template-panel-tools">
+            <a class="secondary-button button-link" href="./designer.html">Create New Template</a>
+            <p id="templateLibraryStatus" class="template-meta">Saved templates from the designer load automatically.</p>
+          </div>
+        </div>
+
+        <div class="template-toolbar">
+          <label class="field">
+            <span>Search</span>
+            <input id="templateSearchInput" type="text" placeholder="Filter by name, file, or source">
+          </label>
+
+          <label class="field">
+            <span>Source</span>
+            <select id="sourceFilterSelect">
+              <option value="all">All Sources</option>
+              <option value="bundled">Bundled</option>
+              <option value="saved">Saved</option>
+              <option value="folder">Folder</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Category</span>
+            <select id="categoryFilterSelect">
+              <option value="all">All Categories</option>
+              <option value="model">Model</option>
+              <option value="repository">Repository</option>
+              <option value="service">Service</option>
+              <option value="controller">Controller</option>
+              <option value="sql">SQL</option>
+              <option value="page">Page</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+
+          <div class="template-toolbar-actions">
+            <button id="collapseAllButton" class="secondary-button" type="button">Collapse All</button>
+            <button id="expandAllButton" class="secondary-button" type="button">Expand All</button>
+            <button id="copyAllButton" class="secondary-button" type="button">Copy Visible</button>
+          </div>
+        </div>
+
+        <div id="templateCards" class="template-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <template id="templateCardTemplate">
+    <article class="template-card">
+      <div class="template-card-header">
+        <div class="template-headline">
+          <h3 class="template-title"></h3>
+          <p class="template-file-pattern"></p>
+          <div class="template-badges">
+            <span class="template-badge template-category"></span>
+            <span class="template-badge template-source"></span>
+          </div>
+        </div>
+        <div class="template-card-actions">
+          <button class="toggle-button secondary-button" type="button">Hide Output</button>
+          <button class="duplicate-button secondary-button" type="button">Duplicate</button>
+          <button class="edit-button secondary-button" type="button">Edit</button>
+          <button class="copy-button" type="button">Copy Output</button>
+        </div>
+      </div>
+      <div class="template-card-body">
+        <label class="field field-block">
+          <span>Generated Output</span>
+          <pre class="template-output"><code class="template-output-code"></code></pre>
+        </label>
+      </div>
+      <p class="template-meta"></p>
+    </article>
+  </template>
+
+  <div id="editorModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="true"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="editorModalTitle">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow modal-eyebrow">Template Editor</p>
+          <h2 id="editorModalTitle">Edit Template</h2>
+        </div>
+        <button id="closeEditorButton" class="secondary-button" type="button">Close</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Template Name</span>
+          <input id="modalNameInput" type="text">
+        </label>
+        <label class="field">
+          <span>Output File Pattern</span>
+          <input id="modalFilePatternInput" type="text">
+        </label>
+      </div>
+
+      <div class="modal-workspace">
+        <label class="field field-block modal-editor-pane">
+          <span>Template Body</span>
+          <textarea id="modalBodyInput" class="modal-textarea" spellcheck="false"></textarea>
+        </label>
+
+        <aside class="template-legend-panel modal-legend-pane">
+          <div class="template-legend-heading">Templating Legend</div>
+          <div class="template-legend-content">
+            <div class="legend-group">
+              <strong>Model</strong>
+              <p><code>{{ model.UseName }}</code>, <code>{{ model.Table }}</code>, <code>{{ model.TableName }}</code>, <code>{{ model.TableSchema }}</code>, <code>{{ model.TableQualifiedName }}</code></p>
+              <p><code>{{ model.Primary }}</code>, <code>{{ model.PrimaryDataType }}</code>, <code>{{ model.PrimaryRouteConstraint }}</code>, <code>{{ model.ClassLower }}</code></p>
+              <p><code>{{ model.Param }}</code>, <code>{{ model.ParamNoPrimary }}</code></p>
+            </div>
+
+            <div class="legend-group">
+              <strong>Column Item</strong>
+              <p><code>{{ item.ColumnName }}</code>, <code>{{ item.ReadableName }}</code>, <code>{{ item.KeywordDataType }}</code>, <code>{{ item.SqlDataType }}</code></p>
+              <p><code>{{ item.Nullable }}</code>, <code>{{ item.CanBeNullable }}</code>, <code>{{ item.IsAutoIncrement }}</code></p>
+            </div>
+
+            <div class="legend-group">
+              <strong>Syntax</strong>
+              <p><code>{{ for item in model.Param }} ... {{ end }}</code></p>
+              <p><code>{{ if model.PrimaryRouteConstraint != "" }} ... {{ else }} ... {{ end }}</code></p>
+              <p><code>{{ item.CanBeNullable ? "?" : "" }}</code></p>
+            </div>
+
+            <div class="legend-group">
+              <strong>Helpers</strong>
+              <p><code>string.lower</code>, <code>string.upper</code>, <code>string.trim</code>, <code>string.replace</code></p>
+              <p><code>array.join</code>, <code>array.size</code>, <code>array.first</code>, <code>array.last</code></p>
+              <p><code>number.round</code>, <code>number.floor</code>, <code>number.ceil</code>, <code>number.format</code></p>
+              <p><code>date.to_string</code>, <code>date.add_days</code>, <code>default</code>, <code>empty</code></p>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="action-row modal-actions">
+        <button id="saveModalTemplateButton" class="primary-button" type="button">Save Changes</button>
+        <button id="saveAsNewModalTemplateButton" class="secondary-button" type="button">Save As New</button>
+        <button id="deleteModalTemplateButton" class="secondary-button" type="button" hidden>Delete Saved</button>
+        <button id="downloadModalTemplateButton" class="secondary-button" type="button">Download Template</button>
+      </div>
+      <p id="modalStatus" class="template-meta"></p>
+    </div>
+  </div>
+
+  <script src="./script.js"></script>
+</body>
+</html>
