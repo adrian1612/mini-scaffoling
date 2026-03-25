@@ -2,6 +2,8 @@
 
 Portable HTML/CSS/JS version of the scaffolding workflow.
 
+Copyright (c) 2026 Adrian Jaspio. All rights reserved.
+
 ## How it works
 
 1. Open `index.html`.
