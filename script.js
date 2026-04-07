@@ -107,7 +107,7 @@ END`, "bundled/stored-procedure.template")
       aiRpdLimitInput: document.getElementById("aiRpdLimitInput"),
       aiUsageBadge: document.getElementById("aiUsageBadge"),
       fetchAiModelsButton: document.getElementById("fetchAiModelsButton"),
-      aiModelList: document.getElementById("aiModelList"),
+      aiModelSelect: document.getElementById("aiModelSelect"),
       saveAiSettingsButton: document.getElementById("saveAiSettingsButton"),
       clearAiSettingsButton: document.getElementById("clearAiSettingsButton"),
       aiSettingsStatus: document.getElementById("aiSettingsStatus"),
@@ -190,6 +190,28 @@ END`, "bundled/stored-procedure.template")
       const closeTarget = event.target.closest("[data-close-modal='true']");
       if (closeTarget) closeAiSettingsModal();
     });
+    elements.aiModelSelect.addEventListener("change", function () {
+      elements.aiModelInput.value = elements.aiModelSelect.value;
+    });
+
+    elements.aiProviderSelect.addEventListener("change", function () {
+      elements.aiModelSelect.innerHTML = "";
+      elements.aiModelSelect.style.display = "none";
+      elements.aiModelInput.style.display = "";
+      elements.aiModelInput.value = "";
+      const defaults = {
+        groq: { rpm: 30, rpd: 14400 },
+        openrouter: { rpm: 20, rpd: 50 },
+        gemini: { rpm: 5, rpd: 20 },
+        ollama: { rpm: 0, rpd: 0 }
+      };
+      const preset = defaults[elements.aiProviderSelect.value];
+      if (preset) {
+        elements.aiRpmLimitInput.value = preset.rpm;
+        elements.aiRpdLimitInput.value = preset.rpd;
+      }
+    });
+
     elements.fetchAiModelsButton.addEventListener("click", async function () {
       const provider = elements.aiProviderSelect.value;
       const apiKey = elements.aiKeyInput.value.trim();
@@ -212,29 +234,55 @@ END`, "bundled/stored-procedure.template")
             .map(m => String(m.name || "").replace(/^models\//, ""))
             .filter(Boolean)
             .sort();
+        } else if (provider === "groq" || provider === "openrouter") {
+          if (!apiKey) throw new Error("Paste your API key first.");
+          const baseUrl = provider === "groq" ? "https://api.groq.com/openai/v1" : "https://openrouter.ai/api/v1";
+          const response = await fetch(`${baseUrl}/models`, {
+            headers: { "Authorization": `Bearer ${apiKey}` }
+          });
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`${provider} ${response.status}: ${errText.slice(0, 200)}`);
+          }
+          const data = await response.json();
+          names = (data.data || []).map(m => m.id).filter(Boolean).sort();
+          if (provider === "openrouter") {
+            const free = names.filter(n => /:free$/.test(n));
+            if (free.length > 0) names = free.concat(names.filter(n => !/:free$/.test(n)));
+          }
         } else if (provider === "ollama") {
           const response = await fetch(`${endpoint.replace(/\/$/, "")}/api/tags`);
           if (!response.ok) throw new Error(`Ollama ${response.status}`);
           const data = await response.json();
           names = (data.models || []).map(m => m.name).filter(Boolean).sort();
         }
-        elements.aiModelList.innerHTML = "";
+        elements.aiModelSelect.innerHTML = "";
         names.forEach(name => {
           const option = document.createElement("option");
           option.value = name;
-          elements.aiModelList.appendChild(option);
+          option.textContent = name;
+          elements.aiModelSelect.appendChild(option);
         });
         if (names.length === 0) {
           elements.aiSettingsStatus.textContent = "No compatible models returned for this key.";
           elements.aiSettingsStatus.className = "template-meta status-error";
+          elements.aiModelSelect.style.display = "none";
+          elements.aiModelInput.style.display = "";
         } else {
-          if (!names.includes(elements.aiModelInput.value.trim())) {
-            const preferred = names.find(n => /2\.5-flash$/.test(n))
-              || names.find(n => /flash-latest$/.test(n))
+          const current = elements.aiModelInput.value.trim();
+          let preferred = current && names.includes(current) ? current : null;
+          if (!preferred) {
+            preferred = names.find(n => /llama-3\.3-70b-versatile/i.test(n))
+              || names.find(n => /qwen.*coder/i.test(n))
+              || names.find(n => /:free$/.test(n))
+              || names.find(n => /2\.5-flash$/.test(n))
               || names.find(n => /flash/.test(n))
               || names[0];
-            elements.aiModelInput.value = preferred;
           }
+          elements.aiModelSelect.value = preferred;
+          elements.aiModelInput.value = preferred;
+          elements.aiModelSelect.style.display = "";
+          elements.aiModelInput.style.display = "none";
           elements.aiSettingsStatus.textContent = `Loaded ${names.length} model(s). Pick one from the list, then Save.`;
           elements.aiSettingsStatus.className = "template-meta status-success";
         }
@@ -393,6 +441,9 @@ END`, "bundled/stored-procedure.template")
       const settings = loadAiSettings() || {};
       elements.aiProviderSelect.value = settings.provider || "gemini";
       elements.aiModelInput.value = settings.model || "";
+      elements.aiModelSelect.innerHTML = "";
+      elements.aiModelSelect.style.display = "none";
+      elements.aiModelInput.style.display = "";
       elements.aiKeyInput.value = settings.apiKey || "";
       elements.aiEndpointInput.value = settings.endpoint || "http://localhost:11434";
       elements.aiRpmLimitInput.value = settings.rpmLimit != null ? settings.rpmLimit : 15;
@@ -2460,6 +2511,61 @@ If one of your desktop templates still fails, it likely needs either a smaller s
       const text = (((data.candidates || [])[0] || {}).content || {}).parts || [];
       const joined = text.map(p => p.text || "").join("");
       return parseAiResponse(joined);
+    }
+
+    if (settings.provider === "groq" || settings.provider === "openrouter") {
+      const baseUrl = settings.provider === "groq"
+        ? "https://api.groq.com/openai/v1"
+        : "https://openrouter.ai/api/v1";
+      const headers = {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${settings.apiKey}`
+      };
+      if (settings.provider === "openrouter") {
+        headers["HTTP-Referer"] = "https://mini-scaffolding.local";
+        headers["X-Title"] = "Mini Scaffolding";
+      }
+      const reinforcedSystem = `${systemPrompt}\n\nYou MUST respond with a valid JSON object only. No prose, no markdown fences. The JSON must match the required schema.`;
+      const buildBody = includeFormat => {
+        const body = {
+          model: settings.model,
+          temperature: 0.2,
+          messages: [
+            { role: "system", content: reinforcedSystem },
+            { role: "user", content: userPrompt }
+          ]
+        };
+        if (includeFormat) body.response_format = { type: "json_object" };
+        return body;
+      };
+
+      let response = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(buildBody(true))
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        const retriable = /json_validate_failed|response_format|does not support/i.test(errText);
+        if (retriable) {
+          response = await fetch(`${baseUrl}/chat/completions`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(buildBody(false))
+          });
+          if (!response.ok) {
+            const retryErr = await response.text();
+            throw new Error(`${settings.provider} ${response.status}: ${retryErr.slice(0, 200)}`);
+          }
+        } else {
+          throw new Error(`${settings.provider} ${response.status}: ${errText.slice(0, 200)}`);
+        }
+      }
+
+      const data = await response.json();
+      const content = (((data.choices || [])[0] || {}).message || {}).content || "";
+      return parseAiResponse(content);
     }
 
     if (settings.provider === "ollama") {

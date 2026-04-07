@@ -286,15 +286,17 @@ CreatedDate	datetime	NULL</textarea>
         <label class="field">
           <span>Provider</span>
           <select id="aiProviderSelect">
+            <option value="groq">Groq (free, fast — recommended)</option>
+            <option value="openrouter">OpenRouter (free models)</option>
             <option value="gemini">Google Gemini (free tier)</option>
-            <option value="ollama">Ollama (localhost)</option>
+            <option value="ollama">Ollama (localhost, unlimited)</option>
           </select>
         </label>
         <label class="field">
           <span>Model</span>
           <div class="ai-model-row">
-            <input id="aiModelInput" type="text" list="aiModelList" placeholder="Click Fetch to load models">
-            <datalist id="aiModelList"></datalist>
+            <select id="aiModelSelect" style="display:none;"></select>
+            <input id="aiModelInput" type="text" placeholder="Click Fetch to load models">
             <button id="fetchAiModelsButton" class="secondary-button" type="button">Fetch</button>
           </div>
         </label>
