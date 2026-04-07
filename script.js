@@ -186,13 +186,6 @@ END`, "bundled/stored-procedure.template")
       const closeTarget = event.target.closest("[data-close-modal='true']");
       if (closeTarget) closeAiSettingsModal();
     });
-    elements.aiProviderSelect.addEventListener("change", function () {
-      if (elements.aiProviderSelect.value === "gemini" && !elements.aiModelInput.value.startsWith("gemini")) {
-        elements.aiModelInput.value = "gemini-2.0-flash";
-      } else if (elements.aiProviderSelect.value === "ollama" && elements.aiModelInput.value.startsWith("gemini")) {
-        elements.aiModelInput.value = "qwen2.5-coder:7b";
-      }
-    });
     elements.fetchAiModelsButton.addEventListener("click", async function () {
       const provider = elements.aiProviderSelect.value;
       const apiKey = elements.aiKeyInput.value.trim();
@@ -310,7 +303,7 @@ END`, "bundled/stored-procedure.template")
     function openAiSettingsModal() {
       const settings = loadAiSettings() || {};
       elements.aiProviderSelect.value = settings.provider || "gemini";
-      elements.aiModelInput.value = settings.model || "gemini-2.0-flash";
+      elements.aiModelInput.value = settings.model || "";
       elements.aiKeyInput.value = settings.apiKey || "";
       elements.aiEndpointInput.value = settings.endpoint || "http://localhost:11434";
       elements.aiSettingsStatus.textContent = "";
