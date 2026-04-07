@@ -1,5 +1,7 @@
 (function () {
   const STORAGE_KEY = "mini-scaffolding.custom-templates";
+  const AI_SETTINGS_KEY = "mini-scaffolding.ai-settings";
+  const aiOverrides = new Map(); // templateId -> { content, instruction }
   const page = document.body.dataset.page || "generator";
 
   const bundledTemplates = [
@@ -92,7 +94,24 @@ END`, "bundled/stored-procedure.template")
       saveAsNewModalTemplateButton: document.getElementById("saveAsNewModalTemplateButton"),
       deleteModalTemplateButton: document.getElementById("deleteModalTemplateButton"),
       downloadModalTemplateButton: document.getElementById("downloadModalTemplateButton"),
-      modalStatus: document.getElementById("modalStatus")
+      modalStatus: document.getElementById("modalStatus"),
+      openAiSettingsButton: document.getElementById("openAiSettingsButton"),
+      aiSettingsModal: document.getElementById("aiSettingsModal"),
+      closeAiSettingsButton: document.getElementById("closeAiSettingsButton"),
+      aiProviderSelect: document.getElementById("aiProviderSelect"),
+      aiModelInput: document.getElementById("aiModelInput"),
+      aiKeyInput: document.getElementById("aiKeyInput"),
+      aiEndpointInput: document.getElementById("aiEndpointInput"),
+      fetchAiModelsButton: document.getElementById("fetchAiModelsButton"),
+      aiModelList: document.getElementById("aiModelList"),
+      saveAiSettingsButton: document.getElementById("saveAiSettingsButton"),
+      clearAiSettingsButton: document.getElementById("clearAiSettingsButton"),
+      aiSettingsStatus: document.getElementById("aiSettingsStatus"),
+      aiPromptInput: document.getElementById("aiPromptInput"),
+      applyAiButton: document.getElementById("applyAiButton"),
+      revertAiButton: document.getElementById("revertAiButton"),
+      aiStatusBadge: document.getElementById("aiStatusBadge"),
+      aiStatusLine: document.getElementById("aiStatusLine")
     };
 
     elements.generateButton.addEventListener("click", generateAll);
@@ -160,8 +179,231 @@ END`, "bundled/stored-procedure.template")
       }
     });
 
+    // --- AI integration wiring ---
+    elements.openAiSettingsButton.addEventListener("click", openAiSettingsModal);
+    elements.closeAiSettingsButton.addEventListener("click", closeAiSettingsModal);
+    elements.aiSettingsModal.addEventListener("click", function (event) {
+      const closeTarget = event.target.closest("[data-close-modal='true']");
+      if (closeTarget) closeAiSettingsModal();
+    });
+    elements.aiProviderSelect.addEventListener("change", function () {
+      if (elements.aiProviderSelect.value === "gemini" && !elements.aiModelInput.value.startsWith("gemini")) {
+        elements.aiModelInput.value = "gemini-2.0-flash";
+      } else if (elements.aiProviderSelect.value === "ollama" && elements.aiModelInput.value.startsWith("gemini")) {
+        elements.aiModelInput.value = "qwen2.5-coder:7b";
+      }
+    });
+    elements.fetchAiModelsButton.addEventListener("click", async function () {
+      const provider = elements.aiProviderSelect.value;
+      const apiKey = elements.aiKeyInput.value.trim();
+      const endpoint = elements.aiEndpointInput.value.trim() || "http://localhost:11434";
+      elements.aiSettingsStatus.textContent = "Fetching available models...";
+      elements.aiSettingsStatus.className = "template-meta";
+      elements.fetchAiModelsButton.disabled = true;
+      try {
+        let names = [];
+        if (provider === "gemini") {
+          if (!apiKey) throw new Error("Paste your API key first.");
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`);
+          if (!response.ok) {
+            const errText = await response.text();
+            throw new Error(`Gemini ${response.status}: ${errText.slice(0, 200)}`);
+          }
+          const data = await response.json();
+          names = (data.models || [])
+            .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+            .map(m => String(m.name || "").replace(/^models\//, ""))
+            .filter(Boolean)
+            .sort();
+        } else if (provider === "ollama") {
+          const response = await fetch(`${endpoint.replace(/\/$/, "")}/api/tags`);
+          if (!response.ok) throw new Error(`Ollama ${response.status}`);
+          const data = await response.json();
+          names = (data.models || []).map(m => m.name).filter(Boolean).sort();
+        }
+        elements.aiModelList.innerHTML = "";
+        names.forEach(name => {
+          const option = document.createElement("option");
+          option.value = name;
+          elements.aiModelList.appendChild(option);
+        });
+        if (names.length === 0) {
+          elements.aiSettingsStatus.textContent = "No compatible models returned for this key.";
+          elements.aiSettingsStatus.className = "template-meta status-error";
+        } else {
+          if (!names.includes(elements.aiModelInput.value.trim())) {
+            const preferred = names.find(n => /2\.5-flash$/.test(n))
+              || names.find(n => /flash-latest$/.test(n))
+              || names.find(n => /flash/.test(n))
+              || names[0];
+            elements.aiModelInput.value = preferred;
+          }
+          elements.aiSettingsStatus.textContent = `Loaded ${names.length} model(s). Pick one from the list, then Save.`;
+          elements.aiSettingsStatus.className = "template-meta status-success";
+        }
+      } catch (error) {
+        elements.aiSettingsStatus.textContent = `Fetch failed: ${error && error.message ? error.message : error}`;
+        elements.aiSettingsStatus.className = "template-meta status-error";
+      } finally {
+        elements.fetchAiModelsButton.disabled = false;
+      }
+    });
+    elements.saveAiSettingsButton.addEventListener("click", function () {
+      const settings = {
+        provider: elements.aiProviderSelect.value,
+        model: elements.aiModelInput.value.trim(),
+        apiKey: elements.aiKeyInput.value.trim(),
+        endpoint: elements.aiEndpointInput.value.trim()
+      };
+      try {
+        localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(settings));
+        elements.aiSettingsStatus.textContent = "AI settings saved in this browser.";
+        elements.aiSettingsStatus.className = "template-meta status-success";
+        refreshAiStatusBadge();
+      } catch (error) {
+        elements.aiSettingsStatus.textContent = "Could not save AI settings to browser storage.";
+        elements.aiSettingsStatus.className = "template-meta status-error";
+      }
+    });
+    elements.clearAiSettingsButton.addEventListener("click", function () {
+      localStorage.removeItem(AI_SETTINGS_KEY);
+      elements.aiKeyInput.value = "";
+      elements.aiSettingsStatus.textContent = "AI key cleared.";
+      elements.aiSettingsStatus.className = "template-meta status-success";
+      refreshAiStatusBadge();
+    });
+    elements.applyAiButton.addEventListener("click", applyAiRefinement);
+    elements.revertAiButton.addEventListener("click", function () {
+      aiOverrides.clear();
+      elements.aiStatusLine.textContent = "Reverted AI edits. Outputs follow templates again.";
+      elements.aiStatusLine.className = "template-meta status-success";
+      generateAll();
+    });
+
+    refreshAiStatusBadge();
+
     renderTemplateCards();
     generateAll();
+
+    function loadAiSettings() {
+      try {
+        const raw = localStorage.getItem(AI_SETTINGS_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function refreshAiStatusBadge() {
+      const settings = loadAiSettings();
+      if (!settings || !settings.apiKey && settings.provider !== "ollama") {
+        elements.aiStatusBadge.textContent = "AI key not set";
+        elements.aiStatusBadge.className = "template-meta status-error";
+      } else {
+        elements.aiStatusBadge.textContent = `${settings.provider} • ${settings.model || "default"}`;
+        elements.aiStatusBadge.className = "template-meta status-success";
+      }
+    }
+
+    function openAiSettingsModal() {
+      const settings = loadAiSettings() || {};
+      elements.aiProviderSelect.value = settings.provider || "gemini";
+      elements.aiModelInput.value = settings.model || "gemini-2.0-flash";
+      elements.aiKeyInput.value = settings.apiKey || "";
+      elements.aiEndpointInput.value = settings.endpoint || "http://localhost:11434";
+      elements.aiSettingsStatus.textContent = "";
+      elements.aiSettingsStatus.className = "template-meta";
+      elements.aiSettingsModal.classList.remove("hidden");
+      elements.aiSettingsModal.setAttribute("aria-hidden", "false");
+      document.body.style.overflow = "hidden";
+    }
+
+    function closeAiSettingsModal() {
+      elements.aiSettingsModal.classList.add("hidden");
+      elements.aiSettingsModal.setAttribute("aria-hidden", "true");
+      document.body.style.overflow = "";
+    }
+
+    async function applyAiRefinement() {
+      const instruction = elements.aiPromptInput.value.trim();
+      if (!instruction) {
+        elements.aiStatusLine.textContent = "Type an instruction first.";
+        elements.aiStatusLine.className = "template-meta status-error";
+        return;
+      }
+      const settings = loadAiSettings();
+      if (!settings || (settings.provider !== "ollama" && !settings.apiKey)) {
+        elements.aiStatusLine.textContent = "Open AI Settings and save an API key first.";
+        elements.aiStatusLine.className = "template-meta status-error";
+        return;
+      }
+
+      const visible = getVisibleTemplates();
+      const files = visible.map(template => {
+        const raw = (template.outputElement && template.outputElement.dataset.raw) || "";
+        return {
+          id: template.id,
+          name: template.name,
+          file: renderFilePatternSafe(template.filePattern),
+          content: raw
+        };
+      }).filter(file => file.content.trim().length > 0);
+
+      if (files.length === 0) {
+        elements.aiStatusLine.textContent = "Nothing to refine. Generate valid output first.";
+        elements.aiStatusLine.className = "template-meta status-error";
+        return;
+      }
+
+      let schemaContext = "";
+      try {
+        const parsed = parseSchema(elements.schemaInput.value);
+        const model = buildModel(parsed, elements.tableNameInput.value, elements.classNameInput.value);
+        schemaContext = JSON.stringify({
+          table: model.TableQualifiedName,
+          className: model.UseName,
+          primary: model.Primary,
+          columns: model.Param.map(c => ({
+            name: c.ColumnName,
+            type: c.KeywordDataType,
+            sqlType: c.SqlDataType,
+            nullable: c.Nullable,
+            identity: c.IsAutoIncrement,
+            isPrimary: c.IsPrimaryKey
+          }))
+        }, null, 2);
+      } catch (error) {
+        schemaContext = "(schema unavailable)";
+      }
+
+      elements.applyAiButton.disabled = true;
+      elements.aiStatusLine.textContent = "Calling AI...";
+      elements.aiStatusLine.className = "template-meta";
+
+      try {
+        const updated = await callAi(settings, instruction, schemaContext, files);
+        let changed = 0;
+        updated.forEach(entry => {
+          if (!entry || !entry.id || typeof entry.content !== "string") return;
+          const template = templates.find(t => t.id === entry.id);
+          if (!template) return;
+          aiOverrides.set(entry.id, { content: entry.content, instruction });
+          changed += 1;
+        });
+        elements.aiStatusLine.textContent = changed > 0
+          ? `AI updated ${changed} output(s). They are frozen until you revert.`
+          : "AI returned no usable updates.";
+        elements.aiStatusLine.className = changed > 0 ? "template-meta status-success" : "template-meta status-error";
+        generateAll();
+      } catch (error) {
+        elements.aiStatusLine.textContent = `AI error: ${error && error.message ? error.message : error}`;
+        elements.aiStatusLine.className = "template-meta status-error";
+      } finally {
+        elements.applyAiButton.disabled = false;
+      }
+    }
 
     async function loadTemplateFolder(event) {
       const files = Array.from(event.target.files || [])
@@ -290,11 +532,13 @@ END`, "bundled/stored-procedure.template")
 
         getVisibleTemplates().forEach(template => {
           try {
-            const rendered = renderTemplate(template.body, buildScope(model));
+            const override = aiOverrides.get(template.id);
+            const rendered = override ? override.content : renderTemplate(template.body, buildScope(model));
             if (template.outputElement) setTemplateOutput(template, rendered.trim(), renderFilePattern(template.filePattern, model));
             if (template.metaElement) {
-              template.metaElement.textContent = `${template.sourceName} | ${renderFilePattern(template.filePattern, model)}`;
-              template.metaElement.className = "template-meta";
+              const suffix = override ? " | AI modified" : "";
+              template.metaElement.textContent = `${template.sourceName} | ${renderFilePattern(template.filePattern, model)}${suffix}`;
+              template.metaElement.className = override ? "template-meta status-success" : "template-meta";
             }
           } catch (error) {
             if (template.outputElement) setTemplateOutput(template, describeTemplateError(error, template.body), template.filePattern || "");
@@ -1836,6 +2080,96 @@ If one of your desktop templates still fails, it likely needs either a smaller s
 
   function fileNameWithoutExtension(path) {
     return (String(path || "").split(/[\\/]/).pop() || "template").replace(/\.[^.]+$/, "");
+  }
+
+  async function callAi(settings, instruction, schemaContext, files) {
+    const systemPrompt = [
+      "You are a code refactoring assistant for a .NET scaffolding tool.",
+      "You receive a user instruction and a set of generated files (model, repository, service, controller, SQL, etc).",
+      "Rewrite ONLY the files that need changes to satisfy the instruction. Keep unchanged files out of the response.",
+      "Preserve existing code style, namespaces, and class names. Do not add commentary.",
+      "Respond with ONLY a JSON object of the form: {\"files\":[{\"id\":\"...\",\"content\":\"...full updated file...\"}]}",
+      "The id MUST match one of the provided file ids. Content must be the COMPLETE replacement file, not a diff."
+    ].join("\n");
+
+    const userPrompt = [
+      `Instruction: ${instruction}`,
+      "",
+      "Schema context:",
+      schemaContext,
+      "",
+      "Files:",
+      JSON.stringify(files, null, 2)
+    ].join("\n");
+
+    if (settings.provider === "gemini") {
+      const model = settings.model || "gemini-2.0-flash";
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(settings.apiKey)}`;
+      const body = {
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: { responseMimeType: "application/json", temperature: 0.2 }
+      };
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Gemini ${response.status}: ${errText.slice(0, 200)}`);
+      }
+      const data = await response.json();
+      const text = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+      const joined = text.map(p => p.text || "").join("");
+      return parseAiResponse(joined);
+    }
+
+    if (settings.provider === "ollama") {
+      const endpoint = (settings.endpoint || "http://localhost:11434").replace(/\/$/, "");
+      const response = await fetch(`${endpoint}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: settings.model || "qwen2.5-coder:7b",
+          stream: false,
+          format: "json",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ]
+        })
+      });
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Ollama ${response.status}: ${errText.slice(0, 200)}`);
+      }
+      const data = await response.json();
+      return parseAiResponse((data.message && data.message.content) || "");
+    }
+
+    throw new Error(`Unknown AI provider: ${settings.provider}`);
+  }
+
+  function parseAiResponse(text) {
+    const raw = String(text || "").trim();
+    if (!raw) return [];
+    let jsonText = raw;
+    const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenced) jsonText = fenced[1].trim();
+    if (jsonText[0] !== "{" && jsonText[0] !== "[") {
+      const firstBrace = jsonText.indexOf("{");
+      if (firstBrace >= 0) jsonText = jsonText.slice(firstBrace);
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch (error) {
+      throw new Error("AI response was not valid JSON.");
+    }
+    if (Array.isArray(parsed)) return parsed;
+    if (parsed && Array.isArray(parsed.files)) return parsed.files;
+    return [];
   }
 
   function escapeHtml(value) {

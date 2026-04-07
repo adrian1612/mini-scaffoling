@@ -21,6 +21,7 @@
         <a class="primary-button button-link" href="./designer.html">Open Template Designer</a>
         <button id="loadTemplateFolderButton" class="secondary-button" type="button">Load Template Folder</button>
         <button id="resetTemplatesButton" class="secondary-button" type="button">Use Bundled Templates</button>
+        <button id="openAiSettingsButton" class="secondary-button" type="button">AI Settings</button>
         <input id="templateFolderInput" type="file" webkitdirectory directory multiple hidden>
       </div>
     </header>
@@ -144,6 +145,24 @@ CreatedDate	datetime	NULL</textarea>
           </div>
         </div>
 
+        <div class="ai-refine-panel">
+          <div class="ai-refine-header">
+            <div>
+              <h3>Refine with AI</h3>
+              <p>Describe a change and AI will rewrite the visible outputs. Example: "prevent duplicate Code values on insert".</p>
+            </div>
+            <span id="aiStatusBadge" class="template-meta">AI key not set</span>
+          </div>
+          <div class="ai-refine-body">
+            <textarea id="aiPromptInput" spellcheck="false" placeholder="e.g. add a uniqueness check for Code in the repository and return 409 in the controller"></textarea>
+            <div class="ai-refine-actions">
+              <button id="applyAiButton" class="primary-button" type="button">Apply with AI</button>
+              <button id="revertAiButton" class="secondary-button" type="button">Revert All</button>
+            </div>
+          </div>
+          <p id="aiStatusLine" class="template-meta"></p>
+        </div>
+
         <div id="templateCards" class="template-grid"></div>
       </section>
     </main>
@@ -246,6 +265,57 @@ CreatedDate	datetime	NULL</textarea>
         <button id="downloadModalTemplateButton" class="secondary-button" type="button">Download Template</button>
       </div>
       <p id="modalStatus" class="template-meta"></p>
+    </div>
+  </div>
+
+  <div id="aiSettingsModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal="true"></div>
+    <div class="modal-dialog modal-dialog-narrow" role="dialog" aria-modal="true" aria-labelledby="aiSettingsModalTitle">
+      <div class="modal-header">
+        <div>
+          <p class="eyebrow modal-eyebrow">AI Settings</p>
+          <h2 id="aiSettingsModalTitle">Configure AI Provider</h2>
+        </div>
+        <button id="closeAiSettingsButton" class="secondary-button" type="button">Close</button>
+      </div>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Provider</span>
+          <select id="aiProviderSelect">
+            <option value="gemini">Google Gemini (free tier)</option>
+            <option value="ollama">Ollama (localhost)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Model</span>
+          <div class="ai-model-row">
+            <input id="aiModelInput" type="text" value="gemini-2.5-flash" list="aiModelList">
+            <datalist id="aiModelList"></datalist>
+            <button id="fetchAiModelsButton" class="secondary-button" type="button">Fetch</button>
+          </div>
+        </label>
+      </div>
+
+      <label class="field field-block">
+        <span>API Key</span>
+        <input id="aiKeyInput" type="password" placeholder="Paste your Gemini API key (stored only in this browser)">
+      </label>
+
+      <label class="field field-block">
+        <span>Ollama Endpoint (only for Ollama)</span>
+        <input id="aiEndpointInput" type="text" value="http://localhost:11434">
+      </label>
+
+      <p class="template-meta">
+        Get a free Gemini key at <code>aistudio.google.com/app/apikey</code>. The key is saved in this browser only (localStorage) and sent directly to the provider.
+      </p>
+
+      <div class="action-row modal-actions">
+        <button id="saveAiSettingsButton" class="primary-button" type="button">Save</button>
+        <button id="clearAiSettingsButton" class="secondary-button" type="button">Clear Key</button>
+      </div>
+      <p id="aiSettingsStatus" class="template-meta"></p>
     </div>
   </div>
 
