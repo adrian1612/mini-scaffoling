@@ -1,6 +1,7 @@
 (function () {
   const STORAGE_KEY = "mini-scaffolding.custom-templates";
   const AI_SETTINGS_KEY = "mini-scaffolding.ai-settings";
+  const AI_USAGE_KEY = "mini-scaffolding.ai-usage";
   const aiOverrides = new Map(); // templateId -> { content, instruction }
   const page = document.body.dataset.page || "generator";
 
@@ -102,6 +103,9 @@ END`, "bundled/stored-procedure.template")
       aiModelInput: document.getElementById("aiModelInput"),
       aiKeyInput: document.getElementById("aiKeyInput"),
       aiEndpointInput: document.getElementById("aiEndpointInput"),
+      aiRpmLimitInput: document.getElementById("aiRpmLimitInput"),
+      aiRpdLimitInput: document.getElementById("aiRpdLimitInput"),
+      aiUsageBadge: document.getElementById("aiUsageBadge"),
       fetchAiModelsButton: document.getElementById("fetchAiModelsButton"),
       aiModelList: document.getElementById("aiModelList"),
       saveAiSettingsButton: document.getElementById("saveAiSettingsButton"),
@@ -246,13 +250,16 @@ END`, "bundled/stored-procedure.template")
         provider: elements.aiProviderSelect.value,
         model: elements.aiModelInput.value.trim(),
         apiKey: elements.aiKeyInput.value.trim(),
-        endpoint: elements.aiEndpointInput.value.trim()
+        endpoint: elements.aiEndpointInput.value.trim(),
+        rpmLimit: Number(elements.aiRpmLimitInput.value) || 0,
+        rpdLimit: Number(elements.aiRpdLimitInput.value) || 0
       };
       try {
         localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(settings));
         elements.aiSettingsStatus.textContent = "AI settings saved in this browser.";
         elements.aiSettingsStatus.className = "template-meta status-success";
         refreshAiStatusBadge();
+        updateAiUsageDisplay();
       } catch (error) {
         elements.aiSettingsStatus.textContent = "Could not save AI settings to browser storage.";
         elements.aiSettingsStatus.className = "template-meta status-error";
@@ -274,6 +281,8 @@ END`, "bundled/stored-procedure.template")
     });
 
     refreshAiStatusBadge();
+    updateAiUsageDisplay();
+    setInterval(updateAiUsageDisplay, 15000);
 
     renderTemplateCards();
     generateAll();
@@ -287,6 +296,86 @@ END`, "bundled/stored-procedure.template")
       } catch (error) {
         return null;
       }
+    }
+
+    function loadAiUsage() {
+      try {
+        const raw = localStorage.getItem(AI_USAGE_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.filter(ts => typeof ts === "number") : [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function recordAiUsage() {
+      const now = Date.now();
+      const cutoff = now - 24 * 60 * 60 * 1000;
+      const timestamps = loadAiUsage().filter(ts => ts >= cutoff);
+      timestamps.push(now);
+      try {
+        localStorage.setItem(AI_USAGE_KEY, JSON.stringify(timestamps));
+      } catch (error) {
+        // ignore storage errors
+      }
+      updateAiUsageDisplay();
+    }
+
+    function updateAiUsageDisplay() {
+      const settings = loadAiSettings() || {};
+      const rpmLimit = Number(settings.rpmLimit) || 0;
+      const rpdLimit = Number(settings.rpdLimit) || 0;
+      const now = Date.now();
+      const dayCutoff = now - 24 * 60 * 60 * 1000;
+      const minuteCutoff = now - 60 * 1000;
+      const timestamps = loadAiUsage().filter(ts => ts >= dayCutoff);
+
+      if (timestamps.length !== loadAiUsage().length) {
+        try { localStorage.setItem(AI_USAGE_KEY, JSON.stringify(timestamps)); } catch (error) {}
+      }
+
+      const perMinute = timestamps.filter(ts => ts >= minuteCutoff).length;
+      const perDay = timestamps.length;
+
+      if (!settings.apiKey && settings.provider !== "ollama") {
+        elements.aiUsageBadge.textContent = "";
+        return;
+      }
+
+      const parts = [];
+      if (rpmLimit > 0) {
+        const remainingMin = Math.max(0, rpmLimit - perMinute);
+        parts.push(`${remainingMin}/${rpmLimit} per min`);
+      } else {
+        parts.push(`${perMinute} this min`);
+      }
+      if (rpdLimit > 0) {
+        const remainingDay = Math.max(0, rpdLimit - perDay);
+        parts.push(`${remainingDay}/${rpdLimit} per day`);
+      } else {
+        parts.push(`${perDay} today`);
+      }
+
+      const atLimit = (rpmLimit > 0 && perMinute >= rpmLimit) || (rpdLimit > 0 && perDay >= rpdLimit);
+      elements.aiUsageBadge.textContent = parts.join(" • ");
+      elements.aiUsageBadge.className = atLimit ? "template-meta status-error" : "template-meta status-success";
+    }
+
+    function checkAiQuota() {
+      const settings = loadAiSettings() || {};
+      const rpmLimit = Number(settings.rpmLimit) || 0;
+      const rpdLimit = Number(settings.rpdLimit) || 0;
+      const now = Date.now();
+      const timestamps = loadAiUsage();
+      const perMinute = timestamps.filter(ts => ts >= now - 60 * 1000).length;
+      const perDay = timestamps.filter(ts => ts >= now - 24 * 60 * 60 * 1000).length;
+      if (rpmLimit > 0 && perMinute >= rpmLimit) {
+        return `Per-minute limit reached (${perMinute}/${rpmLimit}). Wait up to 60 seconds.`;
+      }
+      if (rpdLimit > 0 && perDay >= rpdLimit) {
+        return `Daily limit reached (${perDay}/${rpdLimit}). Resets over the next 24h.`;
+      }
+      return null;
     }
 
     function refreshAiStatusBadge() {
@@ -306,6 +395,8 @@ END`, "bundled/stored-procedure.template")
       elements.aiModelInput.value = settings.model || "";
       elements.aiKeyInput.value = settings.apiKey || "";
       elements.aiEndpointInput.value = settings.endpoint || "http://localhost:11434";
+      elements.aiRpmLimitInput.value = settings.rpmLimit != null ? settings.rpmLimit : 15;
+      elements.aiRpdLimitInput.value = settings.rpdLimit != null ? settings.rpdLimit : 1500;
       elements.aiSettingsStatus.textContent = "";
       elements.aiSettingsStatus.className = "template-meta";
       elements.aiSettingsModal.classList.remove("hidden");
@@ -331,6 +422,15 @@ END`, "bundled/stored-procedure.template")
         elements.aiStatusLine.textContent = "Open AI Settings and save an API key first.";
         elements.aiStatusLine.className = "template-meta status-error";
         return;
+      }
+
+      if (settings.provider !== "ollama") {
+        const quotaError = checkAiQuota();
+        if (quotaError) {
+          elements.aiStatusLine.textContent = quotaError;
+          elements.aiStatusLine.className = "template-meta status-error";
+          return;
+        }
       }
 
       const visible = getVisibleTemplates();
@@ -374,6 +474,8 @@ END`, "bundled/stored-procedure.template")
       elements.applyAiButton.disabled = true;
       elements.aiStatusLine.textContent = "Calling AI...";
       elements.aiStatusLine.className = "template-meta";
+
+      if (settings.provider !== "ollama") recordAiUsage();
 
       try {
         const updated = await callAi(settings, instruction, schemaContext, files);
@@ -789,8 +891,122 @@ END`, "bundled/stored-procedure.template")
       clearDesignerButton: document.getElementById("clearDesignerButton"),
       designerStatus: document.getElementById("designerStatus"),
       designerSearchInput: document.getElementById("designerSearchInput"),
-      savedTemplateList: document.getElementById("savedTemplateList")
+      savedTemplateList: document.getElementById("savedTemplateList"),
+      designerAiPromptInput: document.getElementById("designerAiPromptInput"),
+      designerApplyAiButton: document.getElementById("designerApplyAiButton"),
+      designerAiStatusBadge: document.getElementById("designerAiStatusBadge"),
+      designerAiUsageBadge: document.getElementById("designerAiUsageBadge"),
+      designerAiStatusLine: document.getElementById("designerAiStatusLine")
     };
+
+    function refreshDesignerAiBadges() {
+      const settings = loadAiSettingsGlobal();
+      if (!settings || (!settings.apiKey && settings.provider !== "ollama")) {
+        elements.designerAiStatusBadge.textContent = "AI key not set";
+        elements.designerAiStatusBadge.className = "template-meta status-error";
+      } else {
+        elements.designerAiStatusBadge.textContent = `${settings.provider} • ${settings.model || "default"}`;
+        elements.designerAiStatusBadge.className = "template-meta status-success";
+      }
+      const usage = formatAiUsageBadge();
+      elements.designerAiUsageBadge.textContent = usage;
+      elements.designerAiUsageBadge.className = "template-meta";
+    }
+
+    refreshDesignerAiBadges();
+    setInterval(refreshDesignerAiBadges, 15000);
+
+    elements.designerApplyAiButton.addEventListener("click", async function () {
+      const instruction = elements.designerAiPromptInput.value.trim();
+      if (!instruction) {
+        elements.designerAiStatusLine.textContent = "Type an instruction first.";
+        elements.designerAiStatusLine.className = "template-meta status-error";
+        return;
+      }
+      const settings = loadAiSettingsGlobal();
+      if (!settings || (settings.provider !== "ollama" && !settings.apiKey)) {
+        elements.designerAiStatusLine.textContent = "Open the generator page → AI Settings and save an API key first.";
+        elements.designerAiStatusLine.className = "template-meta status-error";
+        return;
+      }
+      if (settings.provider !== "ollama") {
+        const quotaError = checkAiQuotaGlobal();
+        if (quotaError) {
+          elements.designerAiStatusLine.textContent = quotaError;
+          elements.designerAiStatusLine.className = "template-meta status-error";
+          return;
+        }
+      }
+
+      const currentName = elements.designerNameInput.value.trim();
+      const currentFile = elements.designerFileInput.value.trim();
+      const currentBody = elements.designerBodyInput.value;
+
+      const files = [{
+        id: "designer-template",
+        name: currentName || "New Template",
+        file: currentFile || "(no file pattern)",
+        content: currentBody || "(empty — please generate from scratch)"
+      }];
+
+      const schemaContext = buildDesignerAiPrimer();
+
+      elements.designerApplyAiButton.disabled = true;
+      elements.designerAiStatusLine.textContent = "Calling AI...";
+      elements.designerAiStatusLine.className = "template-meta";
+
+      if (settings.provider !== "ollama") recordAiUsageGlobal();
+      refreshDesignerAiBadges();
+
+      try {
+        let effectiveInstruction = instruction;
+        let attempt = 0;
+        let lastError = null;
+        let finalContent = null;
+
+        while (attempt < 2) {
+          const updated = await callAi(settings, effectiveInstruction, schemaContext, files);
+          const entry = Array.isArray(updated) ? updated[0] : null;
+          if (!entry || typeof entry.content !== "string") {
+            throw new Error("AI returned no usable template content.");
+          }
+
+          try {
+            validateTemplateFragment(entry.content, "Template Body");
+            finalContent = entry.content;
+            break;
+          } catch (validationError) {
+            lastError = validationError;
+            attempt += 1;
+            if (attempt >= 2) break;
+            files[0].content = entry.content;
+            effectiveInstruction = `${instruction}\n\nYour previous attempt produced a template that failed validation with this error:\n${validationError.message}\n\nFix the template so it compiles. Remove any unsupported syntax. Return the corrected full template.`;
+            if (settings.provider !== "ollama") {
+              const quotaError = checkAiQuotaGlobal();
+              if (quotaError) throw new Error(`Validation failed and cannot retry: ${validationError.message}`);
+              recordAiUsageGlobal();
+              refreshDesignerAiBadges();
+            }
+            elements.designerAiStatusLine.textContent = "AI output failed validation, retrying...";
+          }
+        }
+
+        if (!finalContent) {
+          throw new Error(`AI produced an invalid template after retry: ${lastError ? lastError.message : "unknown error"}`);
+        }
+
+        elements.designerBodyInput.value = finalContent;
+        elements.designerAiStatusLine.textContent = attempt > 0
+          ? "AI updated the template body (after 1 retry). Review and Save when ready."
+          : "AI updated the template body. Review and Save when ready.";
+        elements.designerAiStatusLine.className = "template-meta status-success";
+      } catch (error) {
+        elements.designerAiStatusLine.textContent = `AI error: ${error && error.message ? error.message : error}`;
+        elements.designerAiStatusLine.className = "template-meta status-error";
+      } finally {
+        elements.designerApplyAiButton.disabled = false;
+      }
+    });
 
     let activeDesignerTemplateId = null;
     let designerSearch = "";
@@ -2073,6 +2289,134 @@ If one of your desktop templates still fails, it likely needs either a smaller s
 
   function fileNameWithoutExtension(path) {
     return (String(path || "").split(/[\\/]/).pop() || "template").replace(/\.[^.]+$/, "");
+  }
+
+  function buildDesignerAiPrimer() {
+    const helperNames = Object.keys(helperMethods).sort();
+    const modelExample = bundledTemplates.find(t => /model/i.test(t.name));
+    const procExample = bundledTemplates.find(t => /procedure/i.test(t.name));
+    const examples = [modelExample, procExample].filter(Boolean).map(t =>
+      `Example template "${t.name}" (file: ${t.filePattern}):\n${t.body}`
+    ).join("\n\n---\n\n");
+
+    return [
+      "You are authoring a TEMPLATE, not rendered code. Preserve every {{ ... }} tag literally in the output — do NOT render or evaluate them.",
+      "",
+      "=== SUPPORTED MODEL VARIABLES ===",
+      "{{ model.UseName }}              class name (derived from Preferred Class Name or table)",
+      "{{ model.Table }}                original table input",
+      "{{ model.TableName }}            table name only (no schema)",
+      "{{ model.TableSchema }}          schema only (e.g. dbo)",
+      "{{ model.TableQualifiedName }}   schema.table",
+      "{{ model.Primary }}              primary key column name",
+      "{{ model.PrimaryDataType }}      primary key C# type (int, long, Guid, ...)",
+      "{{ model.PrimaryRouteConstraint }}  ASP.NET route token (int, guid, ...)",
+      "{{ model.ClassLower }}           lower-case class name",
+      "{{ model.Param }}                array of ALL columns",
+      "{{ model.ParamNoPrimary }}       array of columns EXCEPT the primary key (use this for INSERT/UPDATE lists)",
+      "",
+      "=== COLUMN ITEM FIELDS (inside a for-loop) ===",
+      "{{ item.ColumnName }}          raw column name",
+      "{{ item.ReadableName }}        display label (title-cased)",
+      "{{ item.KeywordDataType }}     C# keyword type: int, string, bool, DateTime, decimal, Guid, byte[], ...",
+      "{{ item.SqlDataType }}         SQL type like nvarchar(50), decimal(18,2)",
+      "{{ item.DataTypeName }}        raw SQL type name (nvarchar, int)",
+      "{{ item.Nullable }}            true/false — original nullable flag",
+      "{{ item.CanBeNullable }}       true/false — whether the C# type supports ?",
+      "{{ item.IsAutoIncrement }}     true/false — IDENTITY column",
+      "{{ item.IsPrimaryKey }}        true/false",
+      "{{ item.ColumnSize }}, {{ item.NumericPrecision }}, {{ item.NumericScale }}",
+      "",
+      "=== CONTROL SYNTAX ===",
+      "Loop:       {{ for item in model.Param }} ... {{ end }}",
+      "Loop vars:  {{ for.index }} (0-based), {{ for.first }} (bool), {{ for.last }} (bool)",
+      "If:         {{ if condition }} ... {{ else if other }} ... {{ else }} ... {{ end }}",
+      "Ternary:    {{ item.CanBeNullable ? \"?\" : \"\" }}",
+      "Operators:  ==  !=  <  >  <=  >=  &&  ||  !",
+      "",
+      "=== SUPPORTED HELPERS (pipe syntax: value | helper arg1, arg2) ===",
+      helperNames.join(", "),
+      "",
+      "Helper notes:",
+      "- string.replace: {{ name | string.replace \"old\", \"new\" }}",
+      "- array.join:     {{ items | array.join \", \" }}",
+      "- default:        {{ default value, \"fallback\" }}  (NOTE: function-style, no pipe)",
+      "- empty:          {{ empty value }}                 (function-style)",
+      "- date.to_string: {{ date.now | date.to_string \"yyyy-MM-dd\" }}",
+      "",
+      "=== DO NOT USE (unsupported — will cause compile errors) ===",
+      "- Whitespace trimming: {{- ... -}}",
+      "- {{ include \"...\" }}, {{ assign x = ... }}, {{ capture ... }}, {{ func ... }}",
+      "- Object literals, array literals, arrow functions",
+      "- Helpers not in the list above (do not invent new ones like string.pascal_case)",
+      "- Mutating method calls (.push, .sort, .splice, etc.)",
+      "- Global APIs (window, document, fetch, Object, ...)",
+      "",
+      "=== REFERENCE EXAMPLES (follow this style) ===",
+      examples,
+      "",
+      "=== OUTPUT CONTRACT ===",
+      "Return ONLY the updated template file in the JSON files[] format. id must match the provided id.",
+      "Content MUST be the complete template body (no markdown fences, no commentary).",
+      "Every placeholder must remain as literal {{ ... }} tags — do not substitute values."
+    ].join("\n");
+  }
+
+  function loadAiSettingsGlobal() {
+    try {
+      const raw = localStorage.getItem(AI_SETTINGS_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function loadAiUsageGlobal() {
+    try {
+      const raw = localStorage.getItem(AI_USAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter(ts => typeof ts === "number") : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  function recordAiUsageGlobal() {
+    const now = Date.now();
+    const cutoff = now - 24 * 60 * 60 * 1000;
+    const timestamps = loadAiUsageGlobal().filter(ts => ts >= cutoff);
+    timestamps.push(now);
+    try { localStorage.setItem(AI_USAGE_KEY, JSON.stringify(timestamps)); } catch (error) {}
+  }
+
+  function checkAiQuotaGlobal() {
+    const settings = loadAiSettingsGlobal() || {};
+    const rpmLimit = Number(settings.rpmLimit) || 0;
+    const rpdLimit = Number(settings.rpdLimit) || 0;
+    const now = Date.now();
+    const timestamps = loadAiUsageGlobal();
+    const perMinute = timestamps.filter(ts => ts >= now - 60 * 1000).length;
+    const perDay = timestamps.filter(ts => ts >= now - 24 * 60 * 60 * 1000).length;
+    if (rpmLimit > 0 && perMinute >= rpmLimit) return `Per-minute limit reached (${perMinute}/${rpmLimit}). Wait up to 60 seconds.`;
+    if (rpdLimit > 0 && perDay >= rpdLimit) return `Daily limit reached (${perDay}/${rpdLimit}). Resets over the next 24h.`;
+    return null;
+  }
+
+  function formatAiUsageBadge() {
+    const settings = loadAiSettingsGlobal() || {};
+    if (!settings.apiKey && settings.provider !== "ollama") return "";
+    const rpmLimit = Number(settings.rpmLimit) || 0;
+    const rpdLimit = Number(settings.rpdLimit) || 0;
+    const now = Date.now();
+    const timestamps = loadAiUsageGlobal();
+    const perMinute = timestamps.filter(ts => ts >= now - 60 * 1000).length;
+    const perDay = timestamps.filter(ts => ts >= now - 24 * 60 * 60 * 1000).length;
+    const parts = [];
+    parts.push(rpmLimit > 0 ? `${Math.max(0, rpmLimit - perMinute)}/${rpmLimit} per min` : `${perMinute} this min`);
+    parts.push(rpdLimit > 0 ? `${Math.max(0, rpdLimit - perDay)}/${rpdLimit} per day` : `${perDay} today`);
+    return parts.join(" • ");
   }
 
   async function callAi(settings, instruction, schemaContext, files) {

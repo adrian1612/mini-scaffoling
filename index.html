@@ -151,7 +151,10 @@ CreatedDate	datetime	NULL</textarea>
               <h3>Refine with AI</h3>
               <p>Describe a change and AI will rewrite the visible outputs. Example: "prevent duplicate Code values on insert".</p>
             </div>
-            <span id="aiStatusBadge" class="template-meta">AI key not set</span>
+            <div class="ai-status-group">
+              <span id="aiStatusBadge" class="template-meta">AI key not set</span>
+              <span id="aiUsageBadge" class="template-meta"></span>
+            </div>
           </div>
           <div class="ai-refine-body">
             <textarea id="aiPromptInput" spellcheck="false" placeholder="e.g. add a uniqueness check for Code in the repository and return 409 in the controller"></textarea>
@@ -306,6 +309,17 @@ CreatedDate	datetime	NULL</textarea>
         <span>Ollama Endpoint (only for Ollama)</span>
         <input id="aiEndpointInput" type="text" value="http://localhost:11434">
       </label>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>Requests per Minute Limit</span>
+          <input id="aiRpmLimitInput" type="number" min="0" value="15">
+        </label>
+        <label class="field">
+          <span>Requests per Day Limit</span>
+          <input id="aiRpdLimitInput" type="number" min="0" value="1500">
+        </label>
+      </div>
 
       <p class="template-meta">
         Get a free Gemini key at <code>aistudio.google.com/app/apikey</code>. The key is saved in this browser only (localStorage) and sent directly to the provider.

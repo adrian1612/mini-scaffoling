@@ -19,6 +19,7 @@
       </div>
       <div class="hero-actions">
         <a class="secondary-button button-link" href="./index.html">Back To Generator</a>
+        <a class="secondary-button button-link" href="./index.html#ai-settings">AI Settings (on Generator)</a>
       </div>
     </header>
 
@@ -53,6 +54,26 @@
         </div>
 
         <p id="designerStatus" class="template-meta">Use metadata like `#! name:` and `#! file:` only when importing from folder files. The form here already covers those fields.</p>
+
+        <div class="ai-refine-panel">
+          <div class="ai-refine-header">
+            <div>
+              <h3>Generate or Refine Template with AI</h3>
+              <p>Describe the template you want, or a change to the current body. AI will rewrite the Template Body.</p>
+            </div>
+            <div class="ai-status-group">
+              <span id="designerAiStatusBadge" class="template-meta">AI key not set</span>
+              <span id="designerAiUsageBadge" class="template-meta"></span>
+            </div>
+          </div>
+          <div class="ai-refine-body">
+            <textarea id="designerAiPromptInput" spellcheck="false" placeholder="e.g. generate a C# minimal API endpoint class template with GET/POST/PUT/DELETE using {{ model.* }} variables"></textarea>
+            <div class="ai-refine-actions">
+              <button id="designerApplyAiButton" class="primary-button" type="button">Generate with AI</button>
+            </div>
+          </div>
+          <p id="designerAiStatusLine" class="template-meta"></p>
+        </div>
       </section>
 
       <aside class="panel designer-help-panel">
